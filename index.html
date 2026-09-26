@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-width=1.0">
+    <title>Calculadora y Cuadro de Elección Fallas</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- NUEVO: Barra superior de Usuario / Login -->
+    <div id="auth-bar" class="auth-bar">
+        <div id="user-logged-out">
+            <input type="email" id="auth-email" placeholder="Tu email...">
+            <input type="password" id="auth-password" placeholder="Contraseña...">
+            <button onclick="login()">Entrar</button>
+            <button onclick="registro()">Registrarse</button>
+        </div>
+        <div id="user-logged-in" style="display: none;">
+            <span id="user-email-text">Sesión iniciada</span>
+            <button onclick="abrirModalMiQuiniela()" class="btn-ver-quiniela">👁️ Ver mi quiniela</button>
+            <button onclick="logout()" class="btn-logout">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <header>
+        <h1 id="titulo-app">Probabilidad FMV 2027</h1>
+        <p>Cálculo basado en las notas de las entrevistas</p>
+    </header>
+
+    <!-- Selector de categoría y Ranking -->
+    <div class="selector-modo-container">
+        <button id="btn-mayores" class="btn-modo activo" onclick="cambiarCategoria('mayores')">👸 Mayores</button>
+        <button id="btn-infantiles" class="btn-modo" onclick="cambiarCategoria('infantiles')">👧 Infantiles</button>
+        <button id="btn-ver-quiniela-nav" class="btn-modo" onclick="abrirModalMiQuiniela()">📋 Ver tu quiniela</button>
+        <!-- NUEVO: Botón de Clasificación -->
+        <button id="btn-ranking" class="btn-modo" onclick="toggleClasificacion()" style="border-color: var(--dorado); color: var(--dorado);">🏆 Ranking</button>
+    </div>
+
+    <!-- NUEVO: Zona de Clasificación (Oculta por defecto) -->
+    <div id="zona-clasificacion" style="display: none; background: white; padding: 20px; border-radius: 12px; border: 3px solid var(--dorado); margin-bottom: 30px; text-align: center;">
+        <h2 style="color: var(--color-tema);">Clasificación General (<span id="ranking-modo-texto">Mayores</span>)</h2>
+        <p style="color: #666;">Acierto en Corte: +1 pt | Acierto Fallera Mayor: +5 pts</p>
+        <div id="tabla-ranking-container" style="overflow-x: auto; margin-top: 20px;">
+            <!-- La tabla se generará aquí -->
+        </div>
+    </div>
+
+    <div class="controles-container">
+        <input type="text" id="buscador" placeholder="Buscar candidata o falla..." oninput="renderizarTarjetas()">
+        <select id="filtro-sector" onchange="renderizarTarjetas()">
+            <option value="todos">Todos los sectores</option>
+        </select>
+        
+        <button id="btn-eleccion" onclick="toggleModoEleccion()">Activar Modo Elección</button>
+        <button id="btn-reiniciar" onclick="reiniciarEleccion()" style="display: none; background-color: #555; color: white; border-color: #333;">Reiniciar Elección</button>
+    </div>
+
+    <div id="zona-eleccion">
+        <h2 style="color: var(--color-tema);"><span id="texto-corte">Corte de Honor</span> (Seleccionadas: <span id="contador-corte">0</span>/13)</h2>
+        <div id="corte-grid" class="corte-grid"></div>
+        
+        <div class="fmv-spot">
+            <h2 id="titulo-fmv" style="color: var(--dorado);">Fallera Mayor de Valencia</h2>
+            <div id="fmv-elegida">
+                <p style="color: #666;">Haz clic en una candidata de la Corte para elegirla</p>
+            </div>
+        </div>
+
+        <div id="botones-exportacion" style="display: none; margin-top: 30px; gap: 15px; justify-content: center;">
+            <button onclick="guardarQuinielaEnNube()" id="btn-guardar-nube" style="background-color: var(--color-tema); color: white; border: none;">💾 Guardar Quiniela Oficial</button>
+            <button onclick="compartirWhatsApp()" style="background-color: #25D366; color: white; border: none;">📲 Compartir por WhatsApp</button>
+            <button onclick="descargarImagen()" style="background-color: var(--dorado); color: var(--color-tema); border: none;">📸 Descargar Quiniela</button>
+        </div>
+    </div>
+
+    <div id="grid-candidatas"></div>
+
+    <!-- MODAL: Ver tu Quiniela -->
+    <div id="modal-mi-quiniela" class="modal-overlay" style="display: none;" onclick="cerrarModalSiFondo(event)">
+        <div class="modal-contenido" role="dialog" aria-modal="true" aria-labelledby="modal-quiniela-titulo">
+            <div class="modal-header">
+                <div class="modal-titulo-bloque">
+                    <h2 id="modal-quiniela-titulo">📋 Tu Quiniela Oficial</h2>
+                    <p id="modal-quiniela-subtitulo" class="modal-subtitulo"></p>
+                </div>
+                <button class="modal-btn-cerrar" onclick="cerrarModalMiQuiniela()" title="Cerrar modal">✕</button>
+            </div>
+
+            <!-- Selector de categoría dentro del modal -->
+            <div class="modal-tabs">
+                <button id="modal-tab-mayores" class="modal-tab activo" onclick="cambiarTabModalQuiniela('mayores')">👸 Mayores</button>
+                <button id="modal-tab-infantiles" class="modal-tab" onclick="cambiarTabModalQuiniela('infantiles')">👧 Infantiles</button>
+            </div>
+
+            <!-- Contenido dinámico de la quiniela -->
+            <div id="modal-quiniela-cuerpo" class="modal-cuerpo">
+                <!-- Se inyecta por JS: cargando / estado vacío / elecciones -->
+            </div>
+
+            <div class="modal-footer">
+                <button id="btn-modal-cargar-tablero" class="btn-modal-accion" onclick="cargarQuinielaEnTableroDesdeModal()" style="display: none;">
+                    📥 Cargar en el tablero
+                </button>
+                <button id="btn-modal-compartir" class="btn-modal-accion btn-whatsapp" onclick="compartirWhatsAppDesdeModal()" style="display: none;">
+                    📲 Compartir por WhatsApp
+                </button>
+                <button class="btn-modal-secundario" onclick="cerrarModalMiQuiniela()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="fotos/2027/manifest.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
